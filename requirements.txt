@@ -5,3 +5,4 @@ aws-cdk.aws-lambda
 pre-commit
 flake8
 flake8-bugbear
+boto3
