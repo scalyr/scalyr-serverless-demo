@@ -19,7 +19,7 @@ npm install -g aws-cdk
 The `cdk.json` file tells the CDK Toolkit how to execute your app.
 
 This project is set up like a standard Python project.  The initialization process also creates
-a virtualenv within this project, stored under the .env directory.  To create the virtualenv 
+a virtualenv within this project, stored under the .env directory.  To create the virtualenv
 it assumes that there is a `python3` executable in your path with access to the `venv` package.
 If for any reason the automatic creation of the virtualenv fails, you can create the virtualenv
 manually once the init process completes.
@@ -84,6 +84,23 @@ python3 -m pip install awscli
 
 Then setup aws with:
 ```aws configure
+```
+
+# pre-commit hooks for black code formatting
+
+Run this to setup the git hooks:
+```
+pre-commit install
+```
+
+To test it out:
+```
+pre-commit run --all-files
+```
+
+To update pre-commit (i.e. new black version) run:
+```
+pre-commit autoupdate
 ```
 
 # What to try:

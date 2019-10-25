@@ -2,3 +2,6 @@
 pytest
 aws-cdk.aws_apigateway
 aws-cdk.aws-lambda
+pre-commit
+flake8
+flake8-bugbear

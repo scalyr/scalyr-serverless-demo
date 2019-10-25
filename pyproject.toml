@@ -3,7 +3,6 @@ line-length = 88
 target_version = ['py37']
 include = '\.pyi?$'
 exclude = '''
-
 (
   /(
     | \.git          # root of the project
@@ -15,4 +14,5 @@ exclude = '''
   )/
 )
 '''
-skip-string-normalization = true
+skip-string-normalization = 'true'
+# diff = 'true'
