@@ -86,7 +86,14 @@ Then setup aws with:
 ```aws configure
 ```
 
-# pre-commit hooks for black code formatting
+# pre-commit hooks for code hygiene
+
+The following automatic code hygiene tools are setup as automatic pre-commit hooks
+- Fix End of Files
+- Trim Trailing Whitespace
+- black
+- flake8
+- mypy
 
 Run this to setup the git hooks:
 ```
