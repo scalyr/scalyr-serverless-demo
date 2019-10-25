@@ -102,3 +102,8 @@ cdk deploy hello-cdk-1
 ```
 
 For the current Lambda test, look for the output in the logs `CdkWorkshopStack.Endpoint` followed by a URL which is the API Gateway that has been automatically attached.
+
+# Scalyr-Serverless-Demo
+
+## S3 Bucket
+The bucket `scalyr-serverless-demo` contains sample content
