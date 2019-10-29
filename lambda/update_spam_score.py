@@ -6,5 +6,7 @@ def handler(event, context):
     return {
         'statusCode': 200,
         'headers': {'Content-Type': 'text/plain'},
-        'body': 'Hello, Update Spam Score Friend, you have reached {}\n'.format(event['path']),
+        'body': 'Hello, Update Spam Score Friend, you have reached {}\n'.format(
+            event['path']
+        ),
     }

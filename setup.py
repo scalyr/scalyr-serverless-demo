@@ -8,7 +8,8 @@ with open("README.md") as fp:
 setuptools.setup(
     name="Scalyr Image Spam Detection Pipeline",
     version="0.0.1",
-    description="A sample serverless application that mimics a simple image spam detection pipeline.",
+    description="A sample serverless application that mimics a simple image spam "
+    "detection pipeline.",
     long_description=long_description,
     long_description_content_type="text/markdown",
     author="author",
