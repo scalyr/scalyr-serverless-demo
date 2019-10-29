@@ -6,14 +6,14 @@ with open("README.md") as fp:
 
 
 setuptools.setup(
-    name="hello",
+    name="Scalyr Image Spam Detection Pipeline",
     version="0.0.1",
-    description="A sample CDK Python app",
+    description="A sample serverless application that mimics a simple image spam detection pipeline.",
     long_description=long_description,
     long_description_content_type="text/markdown",
     author="author",
-    package_dir={"": "hello"},
-    packages=setuptools.find_packages(where="hello"),
+    package_dir={"": "spam_detection_pipeline"},
+    packages=setuptools.find_packages(where="spam_detection_pipeline"),
     install_requires=[
         "aws-cdk.core",
         "aws-cdk.aws_iam",

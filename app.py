@@ -2,11 +2,10 @@
 
 from aws_cdk import core
 
-from hello.hello_stack import MyStack
+from spam_detection_pipeline.stack import SpamDetectionPipelineStack
 
 
 app = core.App()
-MyStack(app, "hello-cdk-1", env={'region': 'us-east-1'})
-MyStack(app, "hello-cdk-2", env={'region': 'us-west-2'})
+SpamDetectionPipelineStack(app, "spam-detect-pipeline", env={'region': 'us-east-1'})
 
 app.synth()
