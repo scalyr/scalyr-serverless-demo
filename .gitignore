@@ -2,6 +2,9 @@ pip-wheel-metadata
 # PyCharm
 .idea/
 
+# VSCode
+.vscode/
+
 # CDK
 cdk.out/
 
