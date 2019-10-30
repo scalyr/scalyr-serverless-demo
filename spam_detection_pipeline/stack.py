@@ -21,6 +21,18 @@ class SpamDetectionPipelineStack(core.Stack):
             'UpdateSpamScore', 'update_spam_score.handler'
         )
 
+        # Enable the detection algorithms to invoke the UpdateSpamScore Lambda
+        # to report their results
+        self.__enable_lambda_to_invoke_update_spam_score(
+            self.__detect_known_bad_content_lambda
+        )
+        self.__enable_lambda_to_invoke_update_spam_score(
+            self.__detect_spammy_words_lambda
+        )
+        self.__enable_lambda_to_invoke_update_spam_score(
+            self.__detect_adult_content_lambda
+        )
+
         # Now define a gateway that maps paths to those Lambdas.
         self.__api = apigw.LambdaRestApi(
             self, 'spam_detection_api', handler=self.__analyze_image_lambda, proxy=False
@@ -67,3 +79,25 @@ class SpamDetectionPipelineStack(core.Stack):
         resource.add_method(
             'POST', integration=apigw.LambdaIntegration(lambda_function)
         )
+
+    def __enable_lambda_to_invoke_update_spam_score(self, target_lambda):
+        """
+        Configures `target_lambda` to be able to invoke the
+        `UpdateSpamScore` Lambda.
+
+        This is accomplished by both granting the Lambda permission to invoke
+        `UpdateSpamScore` and to add information to its environment so that it
+        can locate `UpdateSpamScore`.
+
+        :param target_lambda: The target Lambda.
+        :type target_lambda: Lambda
+        """
+        # Publish the Lambda's ARN into the environment so it can be used to
+        # connect to the right Lambda.
+        #
+        # Note, this environment variable must be the same as used in
+        # `lambda_common.py`.
+        target_lambda.add_environment(
+            'LAMBDA_UPDATE_SPAM_SCORE', self.__update_spam_score_lambda.function_arn
+        )
+        self.__update_spam_score_lambda.grant_invoke(target_lambda)
