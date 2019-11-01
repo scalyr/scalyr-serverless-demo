@@ -1,4 +1,10 @@
-from aws_cdk import aws_lambda as _lambda, aws_apigateway as apigw, core
+from aws_cdk import (
+    aws_lambda as _lambda,
+    aws_apigateway as apigw,
+    aws_sns as sns,
+    aws_sns_subscriptions as sns_subscriptions,
+    core,
+)
 
 
 class SpamDetectionPipelineStack(core.Stack):
@@ -21,35 +27,42 @@ class SpamDetectionPipelineStack(core.Stack):
             'UpdateSpamScore', 'update_spam_score.handler'
         )
 
-        # Enable the detection algorithms to invoke the UpdateSpamScore Lambda
-        # to report their results
-        self.__enable_lambda_to_invoke_update_spam_score(
-            self.__detect_known_bad_content_lambda
-        )
-        self.__enable_lambda_to_invoke_update_spam_score(
-            self.__detect_spammy_words_lambda
-        )
-        self.__enable_lambda_to_invoke_update_spam_score(
-            self.__detect_adult_content_lambda
-        )
+        self.__worker_lambdas = {
+            'detect_known_bad_content': self.__detect_known_bad_content_lambda,
+            'detect_spammy_words': self.__detect_spammy_words_lambda,
+            'detect_adult_content': self.__detect_adult_content_lambda,
+        }
 
-        # Now define a gateway that maps paths to those Lambdas.
+        # Define an API gateway and map the initial and final Lambda
         self.__api = apigw.LambdaRestApi(
             self, 'spam_detection_api', handler=self.__analyze_image_lambda, proxy=False
         )
         self.__map_post_to_lambda('analyze_image', self.__analyze_image_lambda)
-        self.__map_post_to_lambda(
-            'detect_adult_content', self.__detect_adult_content_lambda
-        )
-        self.__map_post_to_lambda(
-            'detect_spammy_words', self.__detect_spammy_words_lambda
-        )
-        self.__map_post_to_lambda(
-            'detect_known_bad_content', self.__detect_known_bad_content_lambda
-        )
         self.__map_post_to_lambda('update_spam_score', self.__update_spam_score_lambda)
 
-    def __create_lambda(self, name, handler):
+        # Create an SNS topic to use for fan-out from the initial Lambda
+        self.__analyze_requests_topic = sns.Topic(self, "analyze_requests")
+
+        # Add a reference to the SNS Topic ARN to the analyze_image Lambda
+        self.__analyze_image_lambda.add_environment(
+            'SNS_ANALYZE_REQUESTS_TOPIC_ARN', self.__analyze_requests_topic.topic_arn
+        )
+
+        # Allow the analyze_image lambda to write to the SNS Topic
+        self.__analyze_requests_topic.grant_publish(self.__analyze_image_lambda)
+
+        # For each worker Lambda:
+        # - Allow it to invoke the UpdateSpamScore Lambda to report results
+        # - Add a subscription to the SNS Topic so it receives processing requests
+        # - Add a API gateway mapping for debugging
+        for name, aws_lambda in self.__worker_lambdas.items():
+            self.__enable_lambda_to_invoke_update_spam_score(aws_lambda)
+            self.__analyze_requests_topic.add_subscription(
+                sns_subscriptions.LambdaSubscription(aws_lambda)
+            )
+            self.__map_post_to_lambda(name, aws_lambda)
+
+    def __create_lambda(self, name, handler) -> _lambda.Function:
         """
         :param name: The name of the Lambda
         :type name: str

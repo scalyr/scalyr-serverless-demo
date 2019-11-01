@@ -79,3 +79,47 @@ class UpdateSpamScoreFailure(Exception):
     @property
     def status_code(self):
         return self.__status_code
+
+
+class ImagePayload:
+    def __init__(
+        self,
+        image_url: str,
+        post_id: str,
+        account_id: str,
+        source_device: str,
+        created_timestamp: float,
+    ):
+        """
+        Holds data about an Image Payload, and can serialize the data with .to_json()
+
+        :param image_url: A S3 URL to an image in a publicly accessible bucket
+        :type image_url: str
+        :param post_id: A unique ID for the post
+        :type post_id: str
+        :param account_id: A unique ID for the account creating the post
+        :type account_id: str
+        :param source_device: The device type like ios, android, web, etc
+        :type source_device: str
+        :param created_timestamp: A unix timestamp when the post was created
+        :type created_timestamp: float
+
+        :return: A JSON payload for processing by the Lambdas
+        :rtype: str
+        """
+        self.image_url = image_url
+        self.post_id = post_id
+        self.account_id = account_id
+        self.source_device = source_device
+        self.created_timestamp = created_timestamp
+
+    def to_json(self) -> str:
+        payload = {
+            'ImageURL': self.image_url,
+            'PostID': self.post_id,
+            'AccountID': self.account_id,
+            'SourceDevice': self.source_device,
+            'CreatedTimestamp': self.created_timestamp,
+        }
+
+        return json.dumps(payload)
