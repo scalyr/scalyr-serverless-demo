@@ -1,6 +1,7 @@
 import boto3
 import os
 import json
+from urllib.parse import urlparse
 
 
 class UpdateSpamScoreStub(object):
@@ -123,3 +124,28 @@ class ImagePayload:
         }
 
         return json.dumps(payload)
+
+
+class S3Url(object):
+    """
+    Helper class that takes a S3 URL in format "S3://bucket/path/file.jpeg"
+    and has methods to retrieve the Bucket name, Key name, and entire URL
+    """
+
+    def __init__(self, url):
+        self._parsed = urlparse(url, allow_fragments=False)
+
+    @property
+    def bucket(self) -> str:
+        return self._parsed.netloc
+
+    @property
+    def key(self) -> str:
+        if self._parsed.query:
+            return self._parsed.path.lstrip('/') + '?' + self._parsed.query
+        else:
+            return self._parsed.path.lstrip('/')
+
+    @property
+    def url(self) -> str:
+        return self._parsed.geturl()

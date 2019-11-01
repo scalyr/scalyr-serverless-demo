@@ -3,6 +3,7 @@ from aws_cdk import (
     aws_apigateway as apigw,
     aws_sns as sns,
     aws_sns_subscriptions as sns_subscriptions,
+    aws_iam as _iam,
     core,
 )
 
@@ -54,12 +55,25 @@ class SpamDetectionPipelineStack(core.Stack):
         # For each worker Lambda:
         # - Allow it to invoke the UpdateSpamScore Lambda to report results
         # - Add a subscription to the SNS Topic so it receives processing requests
+        # - Allow it to invoke AWS Rekognition via AWS Managed IAM Policy
+        # - Add a PolicyStatement for access to the S3 bucket
         # - Add a API gateway mapping for debugging
         for name, aws_lambda in self.__worker_lambdas.items():
             self.__enable_lambda_to_invoke_update_spam_score(aws_lambda)
             self.__analyze_requests_topic.add_subscription(
                 sns_subscriptions.LambdaSubscription(aws_lambda)
             )
+            aws_lambda.role.add_managed_policy(
+                _iam.ManagedPolicy.from_aws_managed_policy_name(
+                    'AmazonRekognitionFullAccess'
+                )
+            )
+            aws_lambda.role.add_to_policy(
+                _iam.PolicyStatement(
+                    actions=['*'], resources=['arn:aws:s3:::scalyr-serverless-demo/*']
+                )
+            )
+
             self.__map_post_to_lambda(name, aws_lambda)
 
     def __create_lambda(self, name, handler) -> _lambda.Function:

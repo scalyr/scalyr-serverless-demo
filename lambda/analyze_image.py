@@ -28,7 +28,6 @@ def handler(event, context):
         body['CreatedTimestamp'],
     )
 
-    # TODO(Brian): Validate body and only send desired fields to SNS
     sns_response = _sns.publish(TopicArn=SNS_ARN, Message=payload.to_json())
     print('SNS Response: {}'.format(sns_response))
 
