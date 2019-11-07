@@ -33,6 +33,8 @@ def handler(event, context):
 
     # Process the detected text values, if any bad words are found, update the
     # Spam score and stop processing further
+    all_words_count = len(detected_text)
+    bad_words_count = 0
     for text in detected_text:
         print(
             f'Detected text: {text["DetectedText"]}, '
@@ -42,19 +44,31 @@ def handler(event, context):
         )
         if text["Confidence"] >= __image_confidence_threshold:
             if is_bad_word(text["DetectedText"]) is True:
-                update_spam_score_result = update_spam_score.invoke(
-                    {'bucket': s3_image.bucket, 'key': s3_image.key},
-                    'detect_spammy_words',
-                    1,
-                )
-                print(f"update_spam_score_result: {update_spam_score_result}")
-                break
+                bad_words_count += 1
+
+    score = calculate_score(all_words_count, bad_words_count)
+
+    update_spam_score_result = update_spam_score.invoke(
+        {'bucket': s3_image.bucket, 'key': s3_image.key}, 'detect_spammy_words', score
+    )
+    print(f"update_spam_score_result: {update_spam_score_result}")
 
     return {
         'statusCode': 200,
         'headers': {'Content-Type': 'text/plain'},
         'body': 'Hello, this is the detect_spammy_words lambda',
     }
+
+
+def calculate_score(total_words_count: int, bad_words_count: int) -> float:
+    """
+    Calculate a spam score given the number of words and bad words
+    :param total_words_count: int
+    :param bad_words_count: int
+    :return: float
+    """
+    score = float(min(bad_words_count, 10) / (min(10, total_words_count)))
+    return score
 
 
 def get_text_from_image(bucket: str, key: str):
