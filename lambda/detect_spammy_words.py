@@ -12,8 +12,10 @@ def handler(event, context):
     # This is how the Sns payload is nested, it appears only one record is received
     # with each invocation of the Lambda.
     message = json.loads(event['Records'][0]['Sns']['Message'])
-
     print('message: {}'.format(json.dumps(message)))
+
+    root_trace_id = message['RootTraceID']
+    print(f'RootTraceID: {root_trace_id}')
 
     s3_image = S3Url(message['ImageURL'])
 
