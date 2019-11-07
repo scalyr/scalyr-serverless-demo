@@ -7,3 +7,5 @@ flake8
 flake8-bugbear
 boto3
 mypy
+opentelemetry-api
+opentelemetry-sdk

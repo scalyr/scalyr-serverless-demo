@@ -127,4 +127,5 @@ class SpamDetectionPipelineStack(core.Stack):
         target_lambda.add_environment(
             'LAMBDA_UPDATE_SPAM_SCORE', self.__update_spam_score_lambda.function_arn
         )
+        target_lambda.add_environment('IMAGE_CONFIDENCE_THRESHOLD', '0.6')
         self.__update_spam_score_lambda.grant_invoke(target_lambda)
