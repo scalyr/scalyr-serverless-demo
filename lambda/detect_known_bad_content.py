@@ -1,5 +1,7 @@
 import json
 
+# import imagehash
+
 
 def handler(event, context):
     print('request: {}'.format(json.dumps(event)))

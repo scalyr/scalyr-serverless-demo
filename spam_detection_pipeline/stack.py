@@ -6,10 +6,20 @@ from aws_cdk import (
     core,
 )
 
+# The ARN for the Lambda Layer containing the ImageHash Python library and
+# its dependencies.  You can create this by following the instructions in
+# the `layers` directory.
+IMAGE_HASH_LAYER_ARN = 'arn:aws:lambda:us-east-1:137797084791:layer:ImageHash:1'
+
 
 class SpamDetectionPipelineStack(core.Stack):
     def __init__(self, scope: core.Construct, id: str, **kwargs) -> None:
         super().__init__(scope, id, **kwargs)
+        # A reference to the Layer containing the Image Hash python libaries.
+        self.__image_hash_layer = _lambda.LayerVersion.from_layer_version_arn(
+            self, id, IMAGE_HASH_LAYER_ARN
+        )
+
         # Create references to all of the Lambdas.
         self.__analyze_image_lambda = self.__create_lambda(
             'AnalyzeImage', 'analyze_image.handler'
@@ -23,6 +33,8 @@ class SpamDetectionPipelineStack(core.Stack):
         self.__detect_known_bad_content_lambda = self.__create_lambda(
             'DetectKnownBadContent', 'detect_known_bad_content.handler'
         )
+        self.__detect_known_bad_content_lambda.add_layers(self.__image_hash_layer)
+
         self.__update_spam_score_lambda = self.__create_lambda(
             'UpdateSpamScore', 'update_spam_score.handler'
         )

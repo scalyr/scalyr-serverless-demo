@@ -1,4 +1,8 @@
 pip-wheel-metadata
+
+# Excluded zip files generated for the Lambda Layers
+layers/*.zip
+
 # PyCharm
 .idea/
 

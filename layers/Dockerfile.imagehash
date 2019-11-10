@@ -1,0 +1,13 @@
+FROM python:3.7
+
+RUN set -ex \
+  && apt-get update \
+  && apt-get install zip
+
+RUN set -ex \
+  && cd /tmp \
+  && mkdir python \
+  && pip install --target ./python ImageHash \
+  && zip -r9 python.zip python
+
+CMD ["/bin/sh", "-c", "cp /tmp/python.zip /output/imagehash-layer.zip"]
