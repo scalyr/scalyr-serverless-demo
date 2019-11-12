@@ -1,7 +1,8 @@
 -e .
 pytest
-aws-cdk.aws_apigateway
-aws-cdk.aws-lambda
+aws-cdk.aws_apigateway==1.15.0
+aws-cdk.aws_codedeploy==1.15.0
+aws-cdk.aws-lambda==1.15.0
 pre-commit
 flake8
 flake8-bugbear
