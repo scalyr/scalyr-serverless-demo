@@ -14,6 +14,7 @@ def handler(event, context):
         return return_message(400, "Error: no POST data received")
 
     body = json.loads(event['body'])
+    root_span_id = event['headers']['X-Amzn-Trace-Id']
 
     if not set(
         ('ImageURL', 'PostID', 'AccountID', 'SourceDevice', 'CreatedTimestamp')
@@ -26,13 +27,16 @@ def handler(event, context):
         body['AccountID'],
         body['SourceDevice'],
         body['CreatedTimestamp'],
+        root_span_id,
     )
 
-    # TODO(Brian): Validate body and only send desired fields to SNS
     sns_response = _sns.publish(TopicArn=SNS_ARN, Message=payload.to_json())
     print('SNS Response: {}'.format(sns_response))
 
-    return return_message(200, "Successfully accepted for processing: {}".format(body))
+    return return_message(
+        200,
+        f"Successfully accepted for processing: {body} with RootSpanID {root_span_id}",
+    )
 
 
 def return_message(code, message):

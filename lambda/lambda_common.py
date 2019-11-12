@@ -1,6 +1,7 @@
 import boto3
 import os
 import json
+from urllib.parse import urlparse
 
 
 class UpdateSpamScoreStub(object):
@@ -82,6 +83,26 @@ class UpdateSpamScoreFailure(Exception):
 
 
 class ImagePayload:
+    """
+    Holds data about an Image Payload, and can serialize the data with .to_json()
+
+    :param image_url: A S3 URL to an image in a publicly accessible bucket
+    :type image_url: str
+    :param post_id: A unique ID for the post
+    :type post_id: str
+    :param account_id: A unique ID for the account creating the post
+    :type account_id: str
+    :param source_device: The device type like ios, android, web, etc
+    :type source_device: str
+    :param created_timestamp: A unix timestamp when the post was created
+    :type created_timestamp: float
+    :param root_trace_id: The trace_id received from API Gateway
+    :type root_trace_id: str
+
+    :return: A JSON payload for processing by the Lambdas
+    :rtype: str
+    """
+
     def __init__(
         self,
         image_url: str,
@@ -89,29 +110,15 @@ class ImagePayload:
         account_id: str,
         source_device: str,
         created_timestamp: float,
+        root_trace_id: str,
     ):
-        """
-        Holds data about an Image Payload, and can serialize the data with .to_json()
 
-        :param image_url: A S3 URL to an image in a publicly accessible bucket
-        :type image_url: str
-        :param post_id: A unique ID for the post
-        :type post_id: str
-        :param account_id: A unique ID for the account creating the post
-        :type account_id: str
-        :param source_device: The device type like ios, android, web, etc
-        :type source_device: str
-        :param created_timestamp: A unix timestamp when the post was created
-        :type created_timestamp: float
-
-        :return: A JSON payload for processing by the Lambdas
-        :rtype: str
-        """
         self.image_url = image_url
         self.post_id = post_id
         self.account_id = account_id
         self.source_device = source_device
         self.created_timestamp = created_timestamp
+        self.root_trace_id = root_trace_id
 
     def to_json(self) -> str:
         payload = {
@@ -120,6 +127,39 @@ class ImagePayload:
             'AccountID': self.account_id,
             'SourceDevice': self.source_device,
             'CreatedTimestamp': self.created_timestamp,
+            'RootTraceID': self.root_trace_id,
         }
 
         return json.dumps(payload)
+
+
+class S3Url(object):
+    """
+    Helper class that takes a S3 URL in format
+    and has methods to retrieve the Bucket name, Key name, and entire URL
+    :param url: A S3 URL such as "S3://bucket/path/file.jpeg"
+    :type url: str
+    """
+
+    def __init__(self, url):
+        try:
+            self._parsed = urlparse(url, allow_fragments=False)
+
+            self._bucket = self._parsed.netloc
+            self._key = self._parsed.path.lstrip('/')
+            self._url = self._parsed.geturl()
+        except ValueError:
+            print("exception while attempting to urlparse: {}".format(url))
+            raise
+
+    @property
+    def bucket(self) -> str:
+        return self._bucket
+
+    @property
+    def key(self) -> str:
+        return self._key
+
+    @property
+    def url(self) -> str:
+        return self._url

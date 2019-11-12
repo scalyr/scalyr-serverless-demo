@@ -131,3 +131,8 @@ For the current Lambda test, look for the output in the logs `CdkWorkshopStack.E
 
 ## S3 Bucket
 The bucket `scalyr-serverless-demo` contains sample content
+
+## Configuration
+The following environment variables are used
+`IMAGE_CONFIDENCE_THRESHOLD` is used to determine the threshold at which a word should be considered to exist in
+an image, based on the score returned by AWS Rekognition

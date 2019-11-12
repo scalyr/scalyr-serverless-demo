@@ -6,6 +6,7 @@ from aws_cdk import (
     aws_codedeploy as codedeploy,
     aws_sns as sns,
     aws_sns_subscriptions as sns_subscriptions,
+    aws_iam as _iam,
     core,
 )
 
@@ -174,12 +175,26 @@ class SpamDetectionPipelineStack(core.Stack):
         # For each detection Lambda:
         # - Allow it to invoke the UpdateSpamScore Lambda to report results
         # - Add a subscription to the SNS Topic so it receives processing requests
+        # - Allow it to invoke AWS Rekognition via AWS Managed IAM Policy
+        # - Add a PolicyStatement for access to the S3 bucket
         for aws_lambda in all_lambdas:
             if aws_lambda.name.startswith('Detect'):
                 self.__enable_lambda_to_invoke_update_spam_score(aws_lambda)
                 # noinspection PyTypeChecker
                 self.__analyze_requests_topic.add_subscription(
                     sns_subscriptions.LambdaSubscription(aws_lambda.alias)
+                )
+
+                aws_lambda.function.role.add_managed_policy(
+                    _iam.ManagedPolicy.from_aws_managed_policy_name(
+                        'AmazonRekognitionFullAccess'
+                    )
+                )
+                aws_lambda.function.role.add_to_policy(
+                    _iam.PolicyStatement(
+                        actions=['*'],
+                        resources=['arn:aws:s3:::scalyr-serverless-demo/*'],
+                    )
                 )
 
     def __map_post_to_lambda_alias(self, pipeline_lambda: PipelineLambda):
@@ -215,4 +230,5 @@ class SpamDetectionPipelineStack(core.Stack):
         target_lambda.function.add_environment(
             'LAMBDA_UPDATE_SPAM_SCORE', self.__update_spam_score.alias.function_arn
         )
+        target_lambda.function.add_environment('IMAGE_CONFIDENCE_THRESHOLD', '0.6')
         self.__update_spam_score.function.grant_invoke(target_lambda.function)
