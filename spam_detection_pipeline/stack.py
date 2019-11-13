@@ -139,7 +139,7 @@ class SpamDetectionPipelineStack(core.Stack):
             self, lambda_app, 'DetectSpammyWords'
         )
         self.__detect_adult_content = PipelineLambda(
-            self, lambda_app, 'DetecdtAdultContent'
+            self, lambda_app, 'DetectAdultContent'
         )
         self.__update_spam_score = PipelineLambda(self, lambda_app, 'UpdateSpamScore')
 
@@ -232,3 +232,4 @@ class SpamDetectionPipelineStack(core.Stack):
         )
         target_lambda.function.add_environment('IMAGE_CONFIDENCE_THRESHOLD', '0.6')
         self.__update_spam_score.function.grant_invoke(target_lambda.function)
+        self.__update_spam_score.alias.grant_invoke(target_lambda.function)
