@@ -1,25 +1,13 @@
-import json
-
-from lambda_common import UpdateSpamScoreStub
-
-_update_spam_score = UpdateSpamScoreStub()
+from lambda_common import DetectionHandler, ImagePayload
 
 
-def handler(event, _context):
-    print('request: {}'.format(json.dumps(event)))
+class DetectAdultContentHandler(DetectionHandler):
+    def __init__(self):
+        super().__init__('detect_adult_content')
 
-    message = json.loads(event['Records'][0]['Sns']['Message'])
-    print('message: {}'.format(json.dumps(message)))
+    def _score_image(self, image_payload: ImagePayload) -> float:
+        return 0.0
 
-    root_trace_id = message['RootTraceID']
-    print(f'RootTraceID: {root_trace_id}')
 
-    # The first argument should be the image payload.  Leaving blank for now.
-    response = _update_spam_score.invoke(dict(), "detect_adult_content", 5.0)
-
-    return {
-        'statusCode': 200,
-        'headers': {'Content-Type': 'text/plain'},
-        'body': 'Hello, Detect Adult Content Friend, you have reached {}.  '
-        'Update response was {}\n'.format(event['path'], response),
-    }
+def handler(event, context):
+    return DetectAdultContentHandler().handle_request(event, context)

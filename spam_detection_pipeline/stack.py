@@ -163,14 +163,19 @@ class SpamDetectionPipelineStack(core.Stack):
 
         # Create an SNS topic to use for fan-out from the initial Lambda
         self.__analyze_requests_topic = sns.Topic(self, "analyze_requests")
+        # Create an SNS topic to use for fan-in from the detection Lambdas
+        self.__update_spam_score_topic = sns.Topic(self, "update_spam_score")
 
-        # Add a reference to the SNS Topic ARN to the analyze_image Lambda
-        self.__analyze_image.function.add_environment(
-            'SNS_ANALYZE_REQUESTS_TOPIC_ARN', self.__analyze_requests_topic.topic_arn
+        self.__enable_publish_from_lambda(
+            self.__analyze_requests_topic,
+            self.__analyze_image,
+            'SNS_ANALYZE_IMAGE_TOPIC_ARN',
         )
 
-        # Allow the analyze_image lambda to write to the SNS Topic
-        self.__analyze_requests_topic.grant_publish(self.__analyze_image.function)
+        # noinspection PyTypeChecker
+        self.__update_spam_score_topic.add_subscription(
+            sns_subscriptions.LambdaSubscription(self.__update_spam_score.alias)
+        )
 
         # For each detection Lambda:
         # - Allow it to invoke the UpdateSpamScore Lambda to report results
@@ -179,11 +184,18 @@ class SpamDetectionPipelineStack(core.Stack):
         # - Add a PolicyStatement for access to the S3 bucket
         for aws_lambda in all_lambdas:
             if aws_lambda.name.startswith('Detect'):
-                self.__enable_lambda_to_invoke_update_spam_score(aws_lambda)
                 # noinspection PyTypeChecker
                 self.__analyze_requests_topic.add_subscription(
                     sns_subscriptions.LambdaSubscription(aws_lambda.alias)
                 )
+
+                self.__enable_publish_from_lambda(
+                    self.__update_spam_score_topic,
+                    aws_lambda,
+                    'SNS_UPDATE_SPAM_SCORE_TOPIC_ARN',
+                )
+
+                aws_lambda.function.add_environment('IMAGE_CONFIDENCE_THRESHOLD', '0.6')
 
                 aws_lambda.function.role.add_managed_policy(
                     _iam.ManagedPolicy.from_aws_managed_policy_name(
@@ -208,28 +220,26 @@ class SpamDetectionPipelineStack(core.Stack):
             'POST', integration=apigw.LambdaIntegration(pipeline_lambda.alias)
         )
 
-    def __enable_lambda_to_invoke_update_spam_score(
-        self, target_lambda: PipelineLambda
+    @staticmethod
+    def __enable_publish_from_lambda(
+        sns_topic: sns.Topic, pipeline_lambda: PipelineLambda, env_var_name: str
     ):
-        """
-        Configures `target_lambda` to be able to invoke the
-        `UpdateSpamScore` Lambda.
+        """Enables the specified Lambda to publish to the given SNS Topic.
+        This will also add an environment to the Lambda's environment called
+        `env_var_name` with the SNS Topic's ARN.  The Lambda needs this to
+        actually publish to the topic.
 
-        This is accomplished by both granting the Lambda permission to invoke
-        `UpdateSpamScore` and to add information to its environment so that it
-        can locate `UpdateSpamScore`.
-
-        :param target_lambda: The target Lambda.
-        :type target_lambda: Lambda
+        :param sns_topic: The SNS Topic
+        :param pipeline_lambda: The Lambda that needs to publish to the topic.
+        :param env_var_name: The name of the environment variable that will be
+             added to the Lambda's environment, holding the topic's ARN.
         """
-        # Publish the Lambda's ARN into the environment so it can be used to
-        # connect to the right Lambda.
-        #
-        # Note, this environment variable must be the same as used in
-        # `lambda_common.py`.
-        target_lambda.function.add_environment(
-            'LAMBDA_UPDATE_SPAM_SCORE', self.__update_spam_score.alias.function_arn
-        )
-        target_lambda.function.add_environment('IMAGE_CONFIDENCE_THRESHOLD', '0.6')
-        self.__update_spam_score.function.grant_invoke(target_lambda.function)
-        self.__update_spam_score.alias.grant_invoke(target_lambda.function)
+        # Add a reference the SNS Topic ARN to the lambda's environment so it
+        # can create a client for publishing.
+        pipeline_lambda.function.add_environment(env_var_name, sns_topic.topic_arn)
+
+        # Give both the alias and original Lambda permission to publish.  We
+        # have not tested if we need both, but just to be safe.  If we are in
+        # the middle of updating to a new version, we might need both.
+        sns_topic.grant_publish(pipeline_lambda.alias)
+        sns_topic.grant_publish(pipeline_lambda.function)

@@ -1,21 +1,13 @@
-import json
+from lambda_common import DetectionHandler, ImagePayload
 
-# import imagehash
+
+class DetectKnownBadContentHandler(DetectionHandler):
+    def __init__(self):
+        super().__init__('detect_known_bad_content')
+
+    def _score_image(self, _image_payload: ImagePayload) -> float:
+        return 0.0
 
 
 def handler(event, context):
-    print('request: {}'.format(json.dumps(event)))
-
-    message = json.loads(event['Records'][0]['Sns']['Message'])
-    print('message: {}'.format(json.dumps(message)))
-
-    root_trace_id = message['RootTraceID']
-    print(f'RootTraceID: {root_trace_id}')
-
-    return {
-        'statusCode': 200,
-        'headers': {'Content-Type': 'text/plain'},
-        'body': 'Hello, Detect Known Bad Content Friend, you have reached {}\n'.format(
-            event['path']
-        ),
-    }
+    return DetectKnownBadContentHandler().handle_request(event, context)

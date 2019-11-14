@@ -1,47 +1,53 @@
 import json
-import os
-import boto3
-from lambda_common import ImagePayload
+import traceback
 
-_sns = boto3.client('sns')
-SNS_ARN = os.environ['SNS_ANALYZE_REQUESTS_TOPIC_ARN']
+from lambda_common import (
+    dump_context,
+    publish_to_analyze_image_sns_topic,
+    return_message,
+    parse_json,
+    Constants,
+    HandlerError,
+)
 
 
 def handler(event, context):
-    print('request: {}'.format(json.dumps(event)))
+    try:
+        root_span_id = context.aws_request_id
+        print('request: {}'.format(json.dumps(event)))
+        print('context: {}'.format(dump_context(context)))
 
-    if 'body' not in event:
-        return return_message(400, "Error: no POST data received")
+        if 'body' not in event:
+            return return_message(400, 'Error: no POST data received')
 
-    body = json.loads(event['body'])
-    root_span_id = event['headers']['X-Amzn-Trace-Id']
+        body = parse_json(
+            event['body'],
+            required_fields={
+                Constants.IMAGE_URL,
+                Constants.POST_ID,
+                Constants.ACCOUNT_ID,
+                Constants.SOURCE_DEVICE,
+                Constants.CREATED_TIMESTAMP,
+            },
+        )
 
-    if not set(
-        ('ImageURL', 'PostID', 'AccountID', 'SourceDevice', 'CreatedTimestamp')
-    ).issubset(body):
-        return return_message(400, "Error: Invalid message body")
+        sns_response = publish_to_analyze_image_sns_topic(
+            body[Constants.IMAGE_URL],
+            body[Constants.POST_ID],
+            body[Constants.ACCOUNT_ID],
+            body[Constants.SOURCE_DEVICE],
+            body[Constants.CREATED_TIMESTAMP],
+            root_span_id,
+        )
 
-    payload = ImagePayload(
-        body['ImageURL'],
-        body['PostID'],
-        body['AccountID'],
-        body['SourceDevice'],
-        body['CreatedTimestamp'],
-        root_span_id,
-    )
+        print('SNS Response: {}'.format(sns_response))
 
-    sns_response = _sns.publish(TopicArn=SNS_ARN, Message=payload.to_json())
-    print('SNS Response: {}'.format(sns_response))
-
-    return return_message(
-        200,
-        f"Successfully accepted for processing: {body} with RootSpanID {root_span_id}",
-    )
-
-
-def return_message(code, message):
-    return {
-        'statusCode': code,
-        'headers': {'Content-Type': 'text/plain'},
-        'body': message,
-    }
+        return return_message(
+            200,
+            f"Successfully accepted for processing: {body} with RootSpanID "
+            f"{root_span_id}",
+        )
+    except HandlerError as e:
+        print(f"[ERROR] {e}: ")
+        traceback.print_stack()
+        return e.create_response()
