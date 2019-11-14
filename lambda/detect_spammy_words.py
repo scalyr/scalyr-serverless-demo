@@ -6,10 +6,25 @@ rekognition_client = boto3.client('rekognition')
 
 
 class DetectSpammyWordsHandler(DetectionHandler):
+    """Spam scoring algorithm meant to see if an image has textual content in
+    it that could be spam, based on a list of spammy words.  For example,
+    images with "low mortgage rates" will be maked as spam.
+
+    We extract the textual content using the AWS Rekognition service
+    and then compare the words with a known spam list.  The higher
+    percentage of spammy words in the textual content, the higher
+    the spam score.
+    """
+
     def __init__(self):
         super().__init__('detect_spammy_words')
 
     def _score_image(self, image_payload: ImagePayload) -> float:
+        """Score the image based on whether or not it has spammy words.
+
+        :param image_payload:
+        :return: The spam score from this algorithm.
+        """
         s3_image = S3Url(image_payload.image_url)
 
         # Detect text with Rekognition and get a list of dicts with results
