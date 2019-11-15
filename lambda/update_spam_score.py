@@ -29,7 +29,7 @@ def update_score(scorer: str, score: float, image_url: str, account_id: str) -> 
     :param account_id: The account id posting the image.
     """
     if score < 0 or score > 1:
-        raise InvalidHandlerInputError("Invalid score")
+        raise InvalidHandlerInputError(f"Invalid score: scorer={scorer}")
 
     current_scores = get_current_scores(image_url, account_id)
 
@@ -81,4 +81,4 @@ def handler(event, context):
         traceback.print_stack()
         if log_context is not None:
             log_context.log_end_message(e.status_code, f"Failed due to exception: {e}")
-        return e.create_response()
+        return e.create_response(for_sns_topic=True)

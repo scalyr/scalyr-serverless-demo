@@ -57,17 +57,23 @@ class HandlerError(Exception):
     when their exception is raised.
     """
 
-    def __init__(self, status_code: int, message: str):
+    def __init__(self, status_code: int, message: str, is_retriable: bool = True):
         """Constructs new instance.
 
         :param status_code: The HTTP status code that should be returned
             by the handler due to this exception.
         :param message: The message to include in HTTP response by the
             handler due to this exception.
+        :param is_retriable: True if this error may be resolved if the
+            handler is rerun.  If this is False then `create_response`
+            will return a 200 if the handler is servicing SNS events.
+            (Because retrying it will not help, so better to just
+            mark event as done.)
         """
         super().__init__(message)
         self.__status_code = status_code
         self.__message = message
+        self.__is_retriable = is_retriable
 
     @property
     def status_code(self) -> int:
@@ -76,13 +82,19 @@ class HandlerError(Exception):
         """
         return self.__status_code
 
-    def create_response(self) -> dict:
+    def create_response(self, for_sns_topic: bool = False) -> dict:
         """
+        :param for_sns_topic:  True if this response is for an event for an
+            SNS topic.  If this is True and the error is not retriable, will
+            just return a status code of 200 to dequeue the event.
         :return: The HTTP response to return by the Lambda due to this
             exception.
         """
+        status_code = self.__status_code
+        if not self.__is_retriable and for_sns_topic:
+            status_code = 200
         return {
-            'statusCode': self.__status_code,
+            'statusCode': status_code,
             'headers': {'Content-Type': 'text/plain'},
             'body': self.__message,
         }
@@ -94,7 +106,7 @@ class MissingRequiredField(HandlerError):
     """
 
     def __init__(self, message):
-        super().__init__(500, message)
+        super().__init__(500, message, is_retriable=False)
 
 
 class InvalidJSON(HandlerError):
@@ -102,7 +114,7 @@ class InvalidJSON(HandlerError):
     """
 
     def __init__(self, message):
-        super().__init__(400, message)
+        super().__init__(400, message, is_retriable=False)
 
 
 class MissingSnsTopicEnvironmentVariableException(HandlerError):
@@ -116,6 +128,7 @@ class MissingSnsTopicEnvironmentVariableException(HandlerError):
             f"Missing environment variable {topic_environment_variable_name} "
             f"which is required to publish to SNS topic.  Maybe it was not "
             f"properly added to the Lambda\'s environment.",
+            is_retriable=False,
         )
 
 
@@ -143,7 +156,7 @@ class InvalidHandlerInputError(HandlerError):
     """
 
     def __init__(self, message):
-        super().__init__(500, message)
+        super().__init__(500, message, is_retriable=False)
 
 
 def calculate_latency_ms(start_time: Union[float, None]) -> int:
@@ -648,7 +661,7 @@ class DetectionHandler:
                 self._log_context.log_end_message(
                     e.status_code, f"Failed due to exception: {e}"
                 )
-            return e.create_response()
+            return e.create_response(for_sns_topic=True)
 
     # noinspection PyMethodMayBeStatic
     def _score_image(self, _image_payload: ImagePayload) -> float:
