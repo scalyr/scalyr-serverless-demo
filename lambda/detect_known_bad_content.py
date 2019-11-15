@@ -40,6 +40,7 @@ class DetectKnownBadContentHandler(DetectionHandler):
         :return: The spam score from this algorithm.
         """
         # Fetch image from S3
+        # Emit about start/end of image fetch
         s3_image = S3Url(image_payload.image_url)
         obj = _s3.get_object(Bucket=s3_image.bucket, Key=s3_image.key)
         image_content = Image.open(io.BytesIO(obj['Body'].read()))
@@ -50,6 +51,7 @@ class DetectKnownBadContentHandler(DetectionHandler):
         ahash = imagehash.average_hash(image_content)
 
         closest_hash, image_id = self.__find_closest_image(ahash)
+        # Emit about hash and closest image
 
         if closest_hash is not None:
             hash_diff = abs(closest_hash - ahash)

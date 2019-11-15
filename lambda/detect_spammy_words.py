@@ -1,6 +1,8 @@
 import boto3
 import os
-from lambda_common import DetectionHandler, ImagePayload, S3Url
+import time
+
+from lambda_common import DetectionHandler, ImagePayload, S3Url, calculate_latency_ms
 
 rekognition_client = boto3.client('rekognition')
 
@@ -29,7 +31,6 @@ class DetectSpammyWordsHandler(DetectionHandler):
 
         # Detect text with Rekognition and get a list of dicts with results
         detected_text = self.__get_text_from_image(s3_image.bucket, s3_image.key)
-        print('rekognition response: {}'.format(detected_text))
 
         # Get the confidence threshold to use
         __image_confidence_threshold_value = os.environ.get(
@@ -68,8 +69,7 @@ class DetectSpammyWordsHandler(DetectionHandler):
         score = float(min(bad_words_count, 10) / (min(10, total_words_count)))
         return score
 
-    @staticmethod
-    def __get_text_from_image(bucket: str, key: str):
+    def __get_text_from_image(self, bucket: str, key: str):
         """
         Invokes the AWS Rekognition API with a given bucket and key, and returns a
         a list of dicts with the detection results.
@@ -80,8 +80,16 @@ class DetectSpammyWordsHandler(DetectionHandler):
         :return: list
         """
 
+        start_time = time.time()
+        self._log_context.log("START rekognition.detect_text")
         response = rekognition_client.detect_text(
             Image={'S3Object': {'Bucket': bucket, 'Name': key}}
+        )
+
+        self._log_context.log(
+            f"END rekognition.detect_text "
+            f"latency_ms={calculate_latency_ms(start_time)} "
+            f"words={len(response['TextDetections'])}"
         )
 
         text = response['TextDetections']

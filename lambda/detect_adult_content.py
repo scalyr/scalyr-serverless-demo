@@ -1,6 +1,7 @@
 import boto3
+import time
 
-from lambda_common import DetectionHandler, ImagePayload, S3Url
+from lambda_common import DetectionHandler, ImagePayload, S3Url, calculate_latency_ms
 
 _rekognition_client = boto3.client('rekognition')
 
@@ -25,8 +26,16 @@ class DetectAdultContentHandler(DetectionHandler):
         """
         s3_image = S3Url(image_payload.image_url)
 
+        self._log_context.log("START rekognition.detect_moderation_labels")
+        start_time = time.time()
         detection_response = _rekognition_client.detect_moderation_labels(
             Image={'S3Object': {'Bucket': s3_image.bucket, 'Name': s3_image.key}}
+        )
+
+        self._log_context.log(
+            f"END rekognition.detect_moderation_labels "
+            f"latency_ms={calculate_latency_ms(start_time)} "
+            f"labels={len(detection_response['ModerationLabels'])}"
         )
 
         score = 0.0

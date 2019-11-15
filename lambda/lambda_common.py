@@ -1,12 +1,34 @@
+import time
+
 import boto3
 import os
 import json
 import traceback
 
+from typing import Union
 from urllib.parse import urlparse
 
 
 _sns = boto3.client('sns')
+
+
+def _get_pipeline_lambda_version() -> str:
+    """Returns the current version number for the Pipeline Lambdas.
+
+    This is determined by the contents of `lambda/VERSION`.  This is not the same as
+    the Lambda version number in AWS.
+
+    :return: The Pipeline Lambda software version number.
+    """
+    try:
+        with open('VERSION') as file:
+            return file.read().replace('\n', '').strip()
+    except (IOError, OSError) as e:
+        print(f"Could not read version due to: {e}")
+        return "Unknown"
+
+
+_PIPELINE_LAMBDA_VERSION = _get_pipeline_lambda_version()
 
 
 class Constants:
@@ -114,6 +136,103 @@ class SnsReceiveError(HandlerError):
 
     def __init__(self, message):
         super().__init__(500, message)
+
+
+def calculate_latency_ms(start_time: Union[float, None]) -> int:
+    """Determine the number of milliseconds that have elaspsed since the
+    specified start time.
+
+    Allows `start_time` to be None, though that is not expected to happen
+    in regular processing.  Returns a -1 in that case.
+
+    :param start_time: The start time in fractional seconds since epoch.
+    :return: The number of elapsed milliseconds
+    """
+    if start_time is None:
+        return -1
+    return round((time.time() - start_time) * 1000)
+
+
+# TODO: Maybe LogContext would be better implemented as part of Python's
+# logger functionality.
+class LogContext:
+    """Used to emit logs from a single invocation of a Lambda.
+
+    The context holds information about who invoked the Lambda by
+    tracking the root trace id, parent trace id and current trace id.
+
+    This abstraction provides methods for emitting common log messages
+    for all Lambdas.
+    """
+
+    def __init__(
+        self,
+        lambda_name: str,
+        function_version: int,
+        root_trace: str = None,
+        parent_trace: str = None,
+        current_trace: str = None,
+    ):
+        """Creates an instance to be used for all logging by a single Lambda invocation.
+
+        :param lambda_name: The name of the Lambda being invoked.
+        :param function_version: The AWS function version number for the Lambda.
+        :param root_trace: The id of the root trace that caused this Lambda to
+            be invoked.
+        :param parent_trace: The id of the trace that invoked this Lambda.
+        :param current_trace: The id of the current trace used by this Lambda
+            invocation.
+        """
+        self.__lambda_name = lambda_name
+        self.__function_version = function_version
+        self.__root_trace = root_trace
+        self.__parent_trace = parent_trace
+        self.__current_trace = current_trace
+        self.__pipeline_version = _PIPELINE_LAMBDA_VERSION
+        # Used to track when the Lambda began execution.  Set in `log_start_message`.
+        self.__start_time: Union[float, None] = None
+
+    def log_start_message(self):
+        """Emits the common start message for all Lambda invocations.
+        """
+        self.__start_time = time.time()
+        print(
+            f"START Lambda execution: lambda={self.__lambda_name} "
+            f"version={self.__pipeline_version} "
+            f"aws_version={self.__function_version} "
+            f"trace={self.__current_trace} "
+            f"rtrace={self.__root_trace} "
+            f"ptrace={self.__parent_trace}"
+        )
+
+    def log(self, message: str):
+        """Can be used to emit a message while a Lambda is running.  This will
+         include the current trace id and the version number (as defined in
+         `VERSION`) of the Lambda code.
+
+        :param message: The message to emit.
+        """
+        print(
+            f"{message} trace={self.__current_trace} version={self.__pipeline_version}"
+        )
+
+    def log_end_message(self, status_code: int, message: str):
+        """Emits the end of Lambda message, recording the overall latency of
+        the execution as well as the resulting status code.
+
+        :param status_code:
+        :param message:
+        """
+        print(
+            f"END Lambda execution: lambda={self.__lambda_name} "
+            f"status_code={status_code} "
+            f"latency_ms={calculate_latency_ms(self.__start_time)} "
+            f"message=\"{message}\" "
+            f"version={self.__pipeline_version} "
+            f"trace={self.__current_trace} "
+            f"rtrace={self.__root_trace} "
+            f"ptrace={self.__parent_trace}"
+        )
 
 
 def parse_json(payload: str, required_fields=None) -> dict:
@@ -304,28 +423,52 @@ class UpdateSpamScorePayload:
         )
 
 
-def _publish_to_sns_topic(topic_arn_environment_var: str, payload) -> dict:
+def _publish_to_sns_topic(
+    topic_name: str,
+    topic_arn_environment_var: str,
+    payload,
+    log_context: LogContext = None,
+) -> dict:
     """Publishes the payload object to the SNS topic contained in the
     specified environment variable.
 
     If any error is encountered during publish, `SnsPublishError` is raised.
 
+    :param topic_name: The name of the SNS topic.
     :param topic_arn_environment_var: The name of the environment variable
         containing the ARN of the SNS Topic.
     :param payload: The payload to publish.  This object must have a
         to_json method.
+    :param log_context: The log context to use to emit log messages.
     :return: The SNS response if it is a success.
     """
     topic_arn = os.environ.get(topic_arn_environment_var, None)
     if topic_arn is None:
         raise MissingSnsTopicEnvironmentVariableException(topic_arn_environment_var)
 
+    if log_context is not None:
+        log_context.log(f"START publish_to_sns_topic topic={topic_name}")
+
+    start_time = time.time()
     sns_response = _sns.publish(TopicArn=topic_arn, Message=payload.to_json())
+    latency_ms = calculate_latency_ms(start_time)
     try:
         if sns_response['ResponseMetadata']['HTTPStatusCode'] == 200:
+            if log_context is not None:
+                log_context.log(
+                    f"END publish_to_sns_topic topic={topic_name} "
+                    f"latency_ms={latency_ms} result=200"
+                )
             return sns_response
     except KeyError:
         pass
+
+    if log_context is not None:
+        log_context.log(
+            f"END publish_to_sns_topic topic={topic_name} "
+            f"latency_ms={latency_ms} result=500 "
+            f"response={json.dumps(sns_response)}"
+        )
 
     raise SnsPublishError(sns_response)
 
@@ -337,6 +480,7 @@ def publish_to_analyze_image_sns_topic(
     source_device: str,
     created_timestamp: float,
     root_trace_id: str,
+    log_context: LogContext = None,
 ) -> dict:
     """Publishes the specified image and its metadata to the `analyze_image`
     SNS Topic to be processed by the detection Lambdas.
@@ -351,16 +495,23 @@ def publish_to_analyze_image_sns_topic(
     :param created_timestamp:  The timestamp.
     :param root_trace_id: The id of the root trace that is initiating this
         processing.
+    :param log_context: The log context to use to emit log messages.
     :return: The response from SNS if the publish is successful.
     """
     payload = ImagePayload(
         image_url, post_id, account_id, source_device, created_timestamp, root_trace_id
     )
-    return _publish_to_sns_topic('SNS_ANALYZE_IMAGE_TOPIC_ARN', payload)
+    return _publish_to_sns_topic(
+        'analyze_image', 'SNS_ANALYZE_IMAGE_TOPIC_ARN', payload, log_context=log_context
+    )
 
 
 def publish_to_update_spam_score_sns_topic(
-    image_payload: ImagePayload, scorer: str, score: float, scorer_trace_id
+    image_payload: ImagePayload,
+    scorer: str,
+    score: float,
+    scorer_trace_id,
+    log_context: LogContext = None,
 ) -> dict:
     """Publishes the specified image and its metadata to the `update_spam_score`
     SNS Topic to be processed by UpdateSpamScore Lambda.
@@ -372,10 +523,16 @@ def publish_to_update_spam_score_sns_topic(
     :param scorer: The name of the scorer
     :param score: The score between 0 and 1.
     :param scorer_trace_id: The trace id that performed this scoring.
+    :param log_context: The log context to use to emit log messages.
     :return: The response from SNS if the publish is successful.
     """
     payload = UpdateSpamScorePayload(image_payload, scorer, score, scorer_trace_id)
-    return _publish_to_sns_topic('SNS_UPDATE_SPAM_SCORE_TOPIC_ARN', payload)
+    return _publish_to_sns_topic(
+        'update_spam_score',
+        'SNS_UPDATE_SPAM_SCORE_TOPIC_ARN',
+        payload,
+        log_context=log_context,
+    )
 
 
 def _receive_from_sns_topic(event: dict) -> str:
@@ -426,6 +583,7 @@ class DetectionHandler:
         :param handler_name: The name of the handler deriving this class.
         """
         self.__handler_name = handler_name
+        self._log_context: Union[LogContext, None] = None
 
     def handle_request(self, event: dict, context) -> dict:
         """Handles a Lambda invocation.
@@ -435,22 +593,34 @@ class DetectionHandler:
         :return: The response to return for the Lambda invocation.
         """
         try:
-            print(f"request: {json.dumps(event)}")
-            print(f"context: {dump_context(context)}")
-
             image_payload = receive_from_analyze_image_sns_topic(event)
 
-            root_trace_id = image_payload.root_trace_id
-            print(f"RootTraceID: {root_trace_id}")
+            self._log_context = LogContext(
+                self.__handler_name,
+                context.function_version,
+                root_trace=image_payload.root_trace_id,
+                parent_trace=image_payload.root_trace_id,
+                current_trace=context.aws_request_id,
+            )
+            self._log_context.log_start_message()
 
             score = self._score_image(image_payload)
 
-            update_spam_score_result = publish_to_update_spam_score_sns_topic(
-                image_payload, self.__handler_name, score, context.aws_request_id
+            self._log_context.log(
+                f"score_computed algorithm={self.__handler_name} "
+                f"score={score} image={image_payload.image_url} "
+                f"account_id={image_payload.account_id}"
             )
 
-            print(f"update_spam_score_result: {update_spam_score_result}")
+            publish_to_update_spam_score_sns_topic(
+                image_payload,
+                self.__handler_name,
+                score,
+                context.aws_request_id,
+                log_context=self._log_context,
+            )
 
+            self._log_context.log_end_message(200, "Success")
             return {
                 'statusCode': 200,
                 'headers': {'Content-Type': 'text/plain'},
@@ -459,6 +629,10 @@ class DetectionHandler:
         except HandlerError as e:
             print(f"[ERROR] {e}: ")
             traceback.print_stack()
+            if self._log_context is not None:
+                self._log_context.log_end_message(
+                    e.status_code, f"Failed due to exception: {e}"
+                )
             return e.create_response()
 
     # noinspection PyMethodMayBeStatic
@@ -502,18 +676,3 @@ class S3Url(object):
     @property
     def url(self) -> str:
         return self._url
-
-
-def dump_context(context):
-    return (
-        "request_id={},log_group_name={},log_stream_name={},"
-        "function_name={},limit={},version={},arn={}".format(
-            context.aws_request_id,
-            context.log_group_name,
-            context.log_stream_name,
-            context.function_name,
-            context.memory_limit_in_mb,
-            context.function_version,
-            context.invoked_function_arn,
-        )
-    )
