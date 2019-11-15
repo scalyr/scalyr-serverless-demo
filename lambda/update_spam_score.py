@@ -5,7 +5,42 @@ from lambda_common import (
     HandlerError,
     return_message,
     LogContext,
+    InvalidHandlerInputError,
 )
+
+
+def get_current_scores(_image_url: str, _account_id: str) -> dict:
+    """Retrieves the current spam scores for the specified image.
+
+    :param _image_url: The image URL.
+    :param _account_id: The account id.
+    :return: The spam scores in a dict, an entry for each algorithm.
+    """
+    # Simulation cheat:  We aren't really bothering to store the
+    # spam scores
+    return {}
+
+
+def update_score(scorer: str, score: float, image_url: str, account_id: str) -> bool:
+    """Simulates updating the spam score for the specified image.
+    :param scorer:  The name of the scoring algorithm that computed the score.
+    :param score: The score
+    :param image_url: The image URL.
+    :param account_id: The account id posting the image.
+    """
+    if score < 0 or score > 1:
+        raise InvalidHandlerInputError("Invalid score")
+
+    current_scores = get_current_scores(image_url, account_id)
+
+    current_scores[scorer] = score
+
+    max_score = max(current_scores.values())
+    average_score = sum(current_scores.values()) / len(current_scores)
+
+    is_spam = max_score > 0.75 or (average_score > 0.5 and len(current_scores) == 3)
+    # Simulation fake:  We should write the score here.
+    return is_spam
 
 
 def handler(event, context):
@@ -29,6 +64,15 @@ def handler(event, context):
             f"score={update_spam_score_payload.score} "
             f"image={update_spam_score_payload.image_payload.image_url}"
         )
+
+        is_spam = update_score(
+            update_spam_score_payload.scorer,
+            update_spam_score_payload.score,
+            update_spam_score_payload.image_payload.image_url,
+            update_spam_score_payload.image_payload.account_id,
+        )
+
+        log_context.log(f"spam_result is_spam={is_spam}")
 
         log_context.log_end_message(200, "Success")
         return return_message(200, f"Event: {event}")

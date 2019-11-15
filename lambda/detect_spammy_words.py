@@ -66,7 +66,7 @@ class DetectSpammyWordsHandler(DetectionHandler):
         :param bad_words_count: int
         :return: float
         """
-        score = float(min(bad_words_count, 10) / (min(10, total_words_count)))
+        score = float(min(bad_words_count, 10) / (min(10, total_words_count))) * 100
         return score
 
     def __get_text_from_image(self, bucket: str, key: str):

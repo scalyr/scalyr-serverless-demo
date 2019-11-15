@@ -138,6 +138,14 @@ class SnsReceiveError(HandlerError):
         super().__init__(500, message)
 
 
+class InvalidHandlerInputError(HandlerError):
+    """Raised when an invalid input is received as an argument to a Lambda
+    """
+
+    def __init__(self, message):
+        super().__init__(500, message)
+
+
 def calculate_latency_ms(start_time: Union[float, None]) -> int:
     """Determine the number of milliseconds that have elaspsed since the
     specified start time.
@@ -605,6 +613,13 @@ class DetectionHandler:
             self._log_context.log_start_message()
 
             score = self._score_image(image_payload)
+
+            # TODO:  Maybe we should make this raise an exception?
+            if score < 0 or score > 1:
+                self._log_context.log(
+                    f"Warning, invalid spam score computed. "
+                    f"Should be between 0 and 1: {score}"
+                )
 
             self._log_context.log(
                 f"score_computed algorithm={self.__handler_name} "
