@@ -60,6 +60,6 @@ def handler(event, context):
         )
     except HandlerError as e:
         print(f"[ERROR] {e}: ")
-        traceback.print_stack()
+        traceback.print_exc()
         log_context.log_end_message(e.status_code, f"Failed due to exception: {e}")
         return e.create_response()

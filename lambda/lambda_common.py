@@ -656,7 +656,7 @@ class DetectionHandler:
             }
         except HandlerError as e:
             print(f"[ERROR] {e}: ")
-            traceback.print_stack()
+            traceback.print_exc()
             if self._log_context is not None:
                 self._log_context.log_end_message(
                     e.status_code, f"Failed due to exception: {e}"

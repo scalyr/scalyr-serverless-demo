@@ -29,7 +29,7 @@ def update_score(scorer: str, score: float, image_url: str, account_id: str) -> 
     :param account_id: The account id posting the image.
     """
     if score < 0 or score > 1:
-        raise InvalidHandlerInputError(f"Invalid score: scorer={scorer}")
+        raise InvalidHandlerInputError(f"Invalid score: score={score}")
 
     current_scores = get_current_scores(image_url, account_id)
 
@@ -45,9 +45,11 @@ def update_score(scorer: str, score: float, image_url: str, account_id: str) -> 
 
 def handler(event, context):
     log_context = None
+    scorer = None
 
     try:
         update_spam_score_payload = receive_from_update_spam_score_sns_topic(event)
+        scorer = update_spam_score_payload.scorer
 
         log_context = LogContext(
             'update_spam_score',
@@ -77,8 +79,8 @@ def handler(event, context):
         log_context.log_end_message(200, "Success")
         return return_message(200, f"Event: {event}")
     except HandlerError as e:
-        print(f"[ERROR] {e}: ")
-        traceback.print_stack()
+        print(f"[ERROR] Error while processing request from {scorer}: {e}:")
+        traceback.print_exc()
         if log_context is not None:
             log_context.log_end_message(e.status_code, f"Failed due to exception: {e}")
         return e.create_response(for_sns_topic=True)
