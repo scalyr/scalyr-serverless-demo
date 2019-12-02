@@ -7,9 +7,10 @@ import traceback
 
 from typing import Union
 from urllib.parse import urlparse
-
+from botocore.exceptions import ClientError
 
 _sns = boto3.client('sns')
+_rekognition_client = boto3.client('rekognition')
 
 
 def _get_pipeline_lambda_version() -> str:
@@ -136,11 +137,18 @@ class SnsPublishError(HandlerError):
     """Raised when an error occurs when publishing to an SNS Topic.
     """
 
-    def __init__(self, sns_response):
+    def __init__(self, status_code, error_message):
         super().__init__(
-            500,
-            f"Failed during SNS publishing.  Response was {json.dumps(sns_response)}",
+            status_code, f"Failed during SNS publishing.  Error was \"{error_message}\""
         )
+
+
+class RekognitionError(HandlerError):
+    """Raised when the Rekognition service returns a non-200.
+    """
+
+    def __init__(self, status_code, message):
+        super().__init__(status_code, message, is_retriable=False)
 
 
 class SnsReceiveError(HandlerError):
@@ -471,9 +479,10 @@ def _publish_to_sns_topic(
         log_context.log(f"START publish_to_sns_topic topic={topic_name}")
 
     start_time = time.time()
-    sns_response = _sns.publish(TopicArn=topic_arn, Message=payload.to_json())
-    latency_ms = calculate_latency_ms(start_time)
+
     try:
+        sns_response = _sns.publish(TopicArn=topic_arn, Message=payload.to_json())
+        latency_ms = calculate_latency_ms(start_time)
         if sns_response['ResponseMetadata']['HTTPStatusCode'] == 200:
             if log_context is not None:
                 log_context.log(
@@ -481,17 +490,22 @@ def _publish_to_sns_topic(
                     f"latency_ms={latency_ms} result=200"
                 )
             return sns_response
-    except KeyError:
-        pass
+        else:
+            status_code = sns_response['ResponseMetadata']['HTTPStatusCode']
+            error_message = 'Unknown error occurred while publishing'
+    except ClientError as e:
+        error_message = str(e)
+        status_code = e.response['ResponseMetadata']['HTTPStatusCode']
 
     if log_context is not None:
+        latency_ms = calculate_latency_ms(start_time)
         log_context.log(
             f"END publish_to_sns_topic topic={topic_name} "
-            f"latency_ms={latency_ms} result=500 "
-            f"response={json.dumps(sns_response)}"
+            f"latency_ms={latency_ms} result={status_code} "
+            f"error=\"{error_message}\""
         )
 
-    raise SnsPublishError(sns_response)
+    raise SnsPublishError(status_code, error_message)
 
 
 def publish_to_analyze_image_sns_topic(
@@ -592,6 +606,64 @@ def receive_from_update_spam_score_sns_topic(event: dict) -> UpdateSpamScorePayl
     :return: The underlying UpdateSpamScorePayload.
     """
     return UpdateSpamScorePayload.from_json(_receive_from_sns_topic(event))
+
+
+def rekognition(
+    log_context: LogContext,
+    detect_moderation_labels: dict = None,
+    detect_text: dict = None,
+):
+    """Issues a request to perform the specified image operation on the given image.
+
+    Exactly one of the `detect` parameters must be not None.  The rekognition invoked
+    is determined by the parameter that is specified.
+
+    Note, this is not a scalable way to expose the rekognition service, but it
+    works for now.
+
+    :param log_context: The log context to use to report the timing and results of
+        the operation.
+    :param detect_moderation_labels:   If not None, rekognition will be invoked
+        on it to detect moderation labels.
+    :param detect_text:   If not None, rekognition will be invoked on it to detect text.
+    :return: The list of moderation or text labels.
+    """
+    if detect_text is not None:
+        operation = 'detect_text'
+    elif log_context is not None:
+        operation = 'detect_moderation_labels'
+    else:
+        raise Exception('rekognition needs at least one parameter')
+
+    start_time = time.time()
+
+    try:
+        log_context.log(f"START rekognition.{operation}")
+        if detect_text is not None:
+            response = _rekognition_client.detect_text(Image=detect_text)
+            message_text = f"words={len(response['TextDetections'])}"
+            result = response['TextDetections']
+        else:
+            response = _rekognition_client.detect_moderation_labels(
+                Image=detect_moderation_labels
+            )
+            message_text = f"labels={len(response['ModerationLabels'])}"
+            result = response['ModerationLabels']
+        log_context.log(
+            f"END rekognition.{operation} status=200 "
+            f"latency_ms={calculate_latency_ms(start_time)} "
+            f"{message_text}"
+        )
+
+        return result
+    except ClientError as e:
+        log_context.log(
+            f"END rekognition.detect_text status="
+            f"{e.response['ResponseMetadata']['HTTPStatusCode']} "
+            f"latency_ms={calculate_latency_ms(start_time)} "
+            f"message={e}"
+        )
+        raise RekognitionError(e.response['ResponseMetadata']['HTTPStatusCode'], str(e))
 
 
 class DetectionHandler:

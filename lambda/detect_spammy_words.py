@@ -1,10 +1,6 @@
-import boto3
 import os
-import time
 
-from lambda_common import DetectionHandler, ImagePayload, S3Url, calculate_latency_ms
-
-rekognition_client = boto3.client('rekognition')
+from lambda_common import DetectionHandler, ImagePayload, S3Url, rekognition
 
 
 class DetectSpammyWordsHandler(DetectionHandler):
@@ -30,7 +26,10 @@ class DetectSpammyWordsHandler(DetectionHandler):
         s3_image = S3Url(image_payload.image_url)
 
         # Detect text with Rekognition and get a list of dicts with results
-        detected_text = self.__get_text_from_image(s3_image.bucket, s3_image.key)
+        detected_text = rekognition(
+            self._log_context,
+            detect_text={'S3Object': {'Bucket': s3_image.bucket, 'Name': s3_image.key}},
+        )
 
         # Get the confidence threshold to use
         __image_confidence_threshold_value = os.environ.get(
@@ -66,34 +65,7 @@ class DetectSpammyWordsHandler(DetectionHandler):
         :param bad_words_count: int
         :return: float
         """
-        score = float(min(bad_words_count, 10) / (min(10, total_words_count))) * 100
-        return score
-
-    def __get_text_from_image(self, bucket: str, key: str):
-        """
-        Invokes the AWS Rekognition API with a given bucket and key, and returns a
-        a list of dicts with the detection results.
-        :param bucket: An AWS S3 bucket name
-        :type bucket: str
-        :param key: A path to an S3 object, without the bucket name or a leading /
-        :type key: str
-        :return: list
-        """
-
-        start_time = time.time()
-        self._log_context.log("START rekognition.detect_text")
-        response = rekognition_client.detect_text(
-            Image={'S3Object': {'Bucket': bucket, 'Name': key}}
-        )
-
-        self._log_context.log(
-            f"END rekognition.detect_text "
-            f"latency_ms={calculate_latency_ms(start_time)} "
-            f"words={len(response['TextDetections'])}"
-        )
-
-        text = response['TextDetections']
-        return text
+        return float(min(bad_words_count, 10) / (min(10, total_words_count))) * 100
 
     @staticmethod
     def __is_bad_word(word: str) -> bool:
