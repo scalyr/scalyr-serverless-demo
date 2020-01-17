@@ -37,7 +37,4 @@ create and upload this Layer.  Follow these instructions to do so:
 
     Find and copy the ARN for the Lambda Layer Version.
 
-4.  Update `stack.py` to redefined `IMAGE_HASH_LAYER_ARN` to the new ARN.
-
-    We could make this value configurable, but for right now, we aren't going to bother to automate
-    something that no one will probably use again.
+4.  Update your `IMAGE_HASH_LAYER_ARN` environment variable to the new ARN.

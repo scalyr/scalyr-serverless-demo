@@ -1,4 +1,6 @@
+import os
 import re
+import sys
 
 from aws_cdk import (
     aws_lambda as _lambda,
@@ -13,7 +15,11 @@ from aws_cdk import (
 # The ARN for the Lambda Layer containing the ImageHash Python library and
 # its dependencies.  You can create this by following the instructions in
 # the `layers` directory.
-IMAGE_HASH_LAYER_ARN = 'arn:aws:lambda:us-east-1:137797084791:layer:ImageHash:1'
+IMAGE_HASH_LAYER_ARN = os.environ.get('IMAGE_HASH_LAYER_ARN', None)
+
+if IMAGE_HASH_LAYER_ARN is None:
+    print("Error, IMAGE_HASH_LAYER_ARN is not set in the environment", file=sys.stderr)
+    sys.exit(1)
 
 
 def _get_pipeline_lambda_version() -> str:
