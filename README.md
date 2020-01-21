@@ -41,7 +41,7 @@ implementation.
 
 ## Installing
 
-This project is based on the [CDK](www.cdkworkshop.com).  You will need to install it
+This project is based on the [CDK](https://cdkworkshop.com/).  You will need to install it
 and all of its dependencies (which includes NodeJS) to run and
 deploy this application.
 
@@ -128,7 +128,7 @@ This will deploy all the components for the spam pipeline Lambda application, in
 Make a note of the API gateway URL.
 
 You will then want to set up the Scalyr CloudWatch Logs integration to capture
-your Lambda's logs.  Please follow the [setup instructions](https://github.com/scalyr/scalyr-aws-serverless/tree/master/cloudwatch_logs)
+your Lambda's logs.  Please follow the [setup instructions](https://github.com/scalyr/scalyr-aws-serverless/tree/master/cloudwatch_logs).
 
 ## Invoking the pipeline
 
