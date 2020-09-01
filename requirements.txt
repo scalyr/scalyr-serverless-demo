@@ -9,4 +9,4 @@ flake8-bugbear
 boto3
 mypy
 ImageHash
-pillow==6.2.1
+pillow==7.2.0
